@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.OleDb;
 using System.Linq;
+using System.Windows.Controls;
 
 namespace HousePlansDatabase
 {
@@ -24,10 +25,10 @@ namespace HousePlansDatabase
             try
             {
                 UIDocument uidoc = commandData.Application.ActiveUIDocument;
-                Document doc = uidoc.Document;
+                Document curDoc = uidoc.Document;
 
                 // Extract plan data from Revit model (including Project Information)
-                clsPlanData planData = ExtractPlanDataFromModel(doc);
+                PlanData planData = ExtractPlanDataFromModel(curDoc);
 
                 if (planData == null)
                 {
@@ -93,22 +94,27 @@ namespace HousePlansDatabase
         /// <summary>
         /// Extract plan data from the active Revit model
         /// </summary>
-        private clsPlanData ExtractPlanDataFromModel(Document doc)
+        private PlanData ExtractPlanDataFromModel(Document curDoc)
         {
             var planData = new PlanData();
 
             // Get all data from Project Information
-            ProjectInfo projInfo = doc.ProjectInformation;
+            ProjectInfo projInfo = curDoc.ProjectInformation;
             if (projInfo != null)
             {
-                // Get plan name
-                planData.PlanName = GetProjectName(doc);
+                // Get plan name from Project Information parameters
+                // Try "Project Name" first, then "Building Name" as fallback
+                planData.PlanName = Utils.GetParameterValueByName(projInfo, "Project Name");
+                if (string.IsNullOrWhiteSpace(planData.PlanName))
+                {
+                    planData.PlanName = Utils.GetParameterValueByName(projInfo, "Building Name");
+                }
 
                 // Get custom parameters from Project Information
-                planData.SpecLevel = GetParameterValue(projInfo, "Spec Level");
-                planData.Client = GetParameterValue(projInfo, "Client");
-                planData.Division = GetParameterValue(projInfo, "Division");
-                planData.Subdivision = GetParameterValue(projInfo, "Subdivision");
+                planData.SpecLevel = Utils.GetParameterValueByName(projInfo, "Spec Level");
+                planData.Client = Utils.GetParameterValueByName(projInfo, "Client");
+                planData.Division = Utils.GetParameterValueByName(projInfo, "Division");
+                planData.Subdivision = Utils.GetParameterValueByName(projInfo, "Subdivision");
             }
 
             // Get overall building dimensions
@@ -117,7 +123,7 @@ namespace HousePlansDatabase
             planData.OverallDepth = depth;
 
             // Count stories (levels)
-            planData.Stories = CountStories(doc);
+            planData.Stories = CountStories(curDoc);
 
             // Count bedrooms and bathrooms
             GetRoomCounts(doc, out int bedrooms, out decimal bathrooms);
@@ -125,78 +131,25 @@ namespace HousePlansDatabase
             planData.Bathrooms = bathrooms;
 
             // Count garage bays
-            planData.GarageBays = CountGarageBays(doc);
+            planData.GarageBays = CountGarageBays(curDoc);
 
             // Calculate areas
-            planData.LivingArea = CalculateLivingArea(doc);
-            planData.TotalArea = CalculateTotalArea(doc);
+            planData.LivingArea = CalculateLivingArea(curDoc);
+            planData.TotalArea = CalculateTotalArea(curDoc);
 
             return planData;
         }
 
         /// <summary>
-        /// Get a parameter value from Project Information (by name)
-        /// </summary>
-        private string GetParameterValue(ProjectInfo projInfo, string parameterName)
-        {
-            // Try to get parameter by name
-            Parameter param = projInfo.LookupParameter(parameterName);
-            if (param != null && param.HasValue)
-            {
-                if (param.StorageType == StorageType.String)
-                {
-                    return param.AsString();
-                }
-                else if (param.StorageType == StorageType.Integer)
-                {
-                    return param.AsInteger().ToString();
-                }
-                else if (param.StorageType == StorageType.Double)
-                {
-                    return param.AsDouble().ToString();
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Get project name from project information
-        /// </summary>
-        private string GetProjectName(Document doc)
-        {
-            // Try to get from Project Information
-            ProjectInfo projInfo = doc.ProjectInformation;
-            if (projInfo != null)
-            {
-                Parameter nameParam = projInfo.get_Parameter(BuiltInParameter.PROJECT_NAME);
-                if (nameParam != null && !string.IsNullOrEmpty(nameParam.AsString()))
-                {
-                    return nameParam.AsString();
-                }
-
-                // Try building name
-                Parameter buildingParam = projInfo.get_Parameter(BuiltInParameter.PROJECT_BUILDING_NAME);
-                if (buildingParam != null && !string.IsNullOrEmpty(buildingParam.AsString()))
-                {
-                    return buildingParam.AsString();
-                }
-            }
-
-            // Fallback to document title
-            return doc.Title.Replace(".rvt", "").Replace(".RVT", "");
-        }
-
-        /// <summary>
         /// Get overall building dimensions from bounding box
         /// </summary>
-        private void GetBuildingDimensions(Document doc, out string width, out string depth)
+        private void GetBuildingDimensions(Document curDoc, out string width, out string depth)
         {
             width = "0'-0\"";
             depth = "0'-0\"";
 
             // Get all walls to calculate building extents
-            FilteredElementCollector collector = new FilteredElementCollector(doc)
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Wall))
                 .WhereElementIsNotElementType();
 
@@ -279,9 +232,9 @@ namespace HousePlansDatabase
         /// <summary>
         /// Count number of stories in the model
         /// </summary>
-        private int CountStories(Document doc)
+        private int CountStories(Document curDoc)
         {
-            FilteredElementCollector collector = new FilteredElementCollector(doc)
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level));
 
             // Filter out levels that are not stories (exclude roof, foundation, etc.)
@@ -297,13 +250,13 @@ namespace HousePlansDatabase
         /// <summary>
         /// Count bedrooms and bathrooms from room elements
         /// </summary>
-        private void GetRoomCounts(Document doc, out int bedrooms, out decimal bathrooms)
+        private void GetRoomCounts(Document curDoc, out int bedrooms, out decimal bathrooms)
         {
             bedrooms = 0;
             decimal fullBaths = 0;
             decimal halfBaths = 0;
 
-            FilteredElementCollector collector = new FilteredElementCollector(doc)
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Room));
 
             foreach (Room room in collector.Cast<Room>())
@@ -338,12 +291,12 @@ namespace HousePlansDatabase
         /// <summary>
         /// Count garage bays
         /// </summary>
-        private int CountGarageBays(Document doc)
+        private int CountGarageBays(Document curDoc)
         {
             int garageBays = 0;
 
             // Method 1: Look for rooms named "Garage"
-            FilteredElementCollector roomCollector = new FilteredElementCollector(doc)
+            FilteredElementCollector roomCollector = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Room));
 
             foreach (Room room in roomCollector.Cast<Room>())
@@ -366,7 +319,7 @@ namespace HousePlansDatabase
             // Method 2: Count garage doors if no room found
             if (garageBays == 0)
             {
-                FilteredElementCollector doorCollector = new FilteredElementCollector(doc)
+                FilteredElementCollector doorCollector = new FilteredElementCollector(curDoc)
                     .OfCategory(BuiltInCategory.OST_Doors)
                     .WhereElementIsNotElementType();
 
@@ -386,11 +339,11 @@ namespace HousePlansDatabase
         /// <summary>
         /// Calculate total living area (excluding garage, porches, etc.)
         /// </summary>
-        private int CalculateLivingArea(Document doc)
+        private int CalculateLivingArea(Document curDoc)
         {
             double totalArea = 0;
 
-            FilteredElementCollector collector = new FilteredElementCollector(doc)
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Room));
 
             foreach (Room room in collector.Cast<Room>())
@@ -420,11 +373,11 @@ namespace HousePlansDatabase
         /// <summary>
         /// Calculate total area (all rooms including garage, porches, etc.)
         /// </summary>
-        private int CalculateTotalArea(Document doc)
+        private int CalculateTotalArea(Document curDoc)
         {
             double totalArea = 0;
 
-            FilteredElementCollector collector = new FilteredElementCollector(doc)
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Room));
 
             foreach (Room room in collector.Cast<Room>())

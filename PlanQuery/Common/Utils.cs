@@ -26,6 +26,29 @@
             return null;
         }
 
+        #region Parameters
+
+        internal static string GetParameterValueByName(Element element, string paramName)
+        {
+            IList<Parameter> paramList = element.GetParameters(paramName);
+
+            if (paramList != null)
+                try
+                {
+                    Parameter param = paramList[0];
+                    string paramValue = param.AsValueString();
+                    return paramValue;
+                }
+                catch (System.ArgumentOutOfRangeException)
+                {
+                    return null;
+                }
+
+            return "";
+        }
+
+        #endregion
+
         #region Task Dialog
 
         /// <summary>

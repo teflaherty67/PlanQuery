@@ -1,5 +1,6 @@
 ﻿using PlanQuery.Common;
 using System.Drawing.Text;
+using System.Net.NetworkInformation;
 
 namespace PlanQuery
 {
@@ -51,24 +52,107 @@ namespace PlanQuery
                 }
 
                 // show confirmation dialog with extracted before saving to database
+                if (!ShowConfirmationDialog(planData))
+                {
+                    return Result.Cancelled;
+                }
 
+                // check if plan already exists in the database before saving
+                if (PlanExistsInDatabase(planData.PlanName, planData.SpecLevel))
+                {
+                    string existsMessage = $"Plan '{planData.PlanName}' with spec '{planData.SpecLevel}' already exists.\n\nDo you want to update it?";
+
+                    // prompt user to confirm if they want to update the existing plan or cancel the operation
+                    if (!Utils.TaskDialogAccept("Plan Query", "Plan Exists", existsMessage))
+                    {
+                        // if user selects no cancel the operation
+                        return Result.Cancelled;
+                    }
+
+                    // if user selects yes update the existing plan in the database
+                    UpdatePlanInDatabase(planData);
+                    Utils.TaskDialogInformation("Plan Query", "Success", $"Updated plan '{planData.PlanName}' in database.");
+                }
+                else
+                {
+                    // if the plan does not exist in the database insert it as a new record
+                    InsertPlanIntoDatabase(planData);
+                    Utils.TaskDialogInformation("cmdPlanQuery", "Success", $"Added plan '{planData.PlanName}' to database.");
+                }
+
+                return Result.Succeeded;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
-                throw;
+                message = ex.Message;
+                Utils.TaskDialogError("cmdPlanQuery", "Error", $"An error occurred:\n{ex.Message}");
+                return Result.Failed;
             }
-
-            
-            // Your code goes here
-
-            return Result.Succeeded;
         }
+
+        #region Plan Data Extraction
 
         private clsPlanData ExtractPlanData(Document curDoc)
         {
+            var planData = new clsPlanData();
+
+            // create variable for project information
+            ProjectInfo curProjInfo = curDoc.ProjectInformation;
+
+            // get plan data from project information and store it
+            planData.PlanName = Utils.GetParameterValueByName(curProjInfo, "Project Name");
+
+            planData.SpecLevel = Utils.GetParameterValueByName(curProjInfo, "Spec Level");
+            planData.Client = Utils.GetParameterValueByName(curProjInfo, "Client");
+            planData.Division = Utils.GetParameterValueByName(curProjInfo, "Division");
+            planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Subdivision");
+
             throw new NotImplementedException();
         }
+
+        #endregion
+
+        private void InsertPlanIntoDatabase(clsPlanData planData)
+        {
+            throw new NotImplementedException();
+        }
+
+        private void UpdatePlanInDatabase(clsPlanData planData)
+        {
+            throw new NotImplementedException();
+        }
+
+        private bool PlanExistsInDatabase(string planName, string specLevel)
+        {
+            throw new NotImplementedException();
+        }
+
+        private bool ShowConfirmationDialog(clsPlanData planData)
+        {
+            string message = $@"Ready to save this plan to the database:
+
+                Plan Name: {planData.PlanName}
+                Spec Level: {planData.SpecLevel}
+                Client: {planData.Client}
+                Division: {planData.Division}
+                Subdivision: {planData.Subdivision}
+
+                Dimensions: {planData.OverallWidth} W x {planData.OverallDepth} D
+                Total Area: {planData.TotalArea:N0} SF
+                Living Area: {planData.LivingArea:N0} SF
+                Bedrooms: {planData.Bedrooms}
+                Bathrooms: {planData.Bathrooms}
+                Stories: {planData.Stories}
+                Garage Bays: {planData.GarageBays}
+
+                Do you want to proceed?";
+
+            return Utils.TaskDialogAccept("Plan Query", "Confirm Plan Data", message);
+        }
+
+        
+
+
 
         internal static PushButtonData GetButtonData()
         {
