@@ -134,7 +134,58 @@ namespace PlanQuery
             return planData;
         }
 
+        /// <summary>
+        /// Get overall building dimensions from bounding box
+        /// </summary>
         private void GetBuildingDimensions(Document curDoc, out string width, out string depth)
+        {
+            width = "0'-0\"";
+            depth = "0'-0\"";
+
+            // Get all walls to calculate building extents
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Wall))
+                .WhereElementIsNotElementType();
+
+            if (collector.Count() == 0)
+                return;
+
+            BoundingBoxXYZ bbox = null;
+
+            foreach (Wall wall in collector.Cast<Wall>())
+            {
+                BoundingBoxXYZ wallBox = wall.get_BoundingBox(null);
+                if (wallBox == null) continue;
+
+                if (bbox == null)
+                {
+                    bbox = wallBox;
+                }
+                else
+                {
+                    bbox.Min = new XYZ(
+                        Math.Min(bbox.Min.X, wallBox.Min.X),
+                        Math.Min(bbox.Min.Y, wallBox.Min.Y),
+                        Math.Min(bbox.Min.Z, wallBox.Min.Z));
+                    bbox.Max = new XYZ(
+                        Math.Max(bbox.Max.X, wallBox.Max.X),
+                        Math.Max(bbox.Max.Y, wallBox.Max.Y),
+                        Math.Max(bbox.Max.Z, wallBox.Max.Z));
+                }
+            }
+
+            if (bbox != null)
+            {
+                // Convert from Revit internal units (decimal feet) to formatted dimension
+                double widthFeet = bbox.Max.X - bbox.Min.X;
+                double depthFeet = bbox.Max.Y - bbox.Min.Y;
+
+                width = FormatDimension(widthFeet);
+                depth = FormatDimension(depthFeet);
+            }
+        }
+
+        private string FormatDimension(double widthFeet)
         {
             throw new NotImplementedException();
         }
