@@ -1,6 +1,7 @@
 ﻿using PlanQuery.Common;
 using System.Drawing.Text;
 using System.Net.NetworkInformation;
+using System.Windows.Controls;
 
 namespace PlanQuery
 {
@@ -92,6 +93,9 @@ namespace PlanQuery
 
         #region Plan Data Extraction
 
+        /// <summary>
+        /// Extract plan data from the active Revit model
+        /// </summary>
         private clsPlanData ExtractPlanData(Document curDoc)
         {
             var planData = new clsPlanData();
@@ -107,8 +111,58 @@ namespace PlanQuery
             planData.Division = Utils.GetParameterValueByName(curProjInfo, "Division");
             planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Subdivision");
 
+            // Get overall building dimensions
+            GetBuildingDimensions(curDoc, out string width, out string depth);
+            planData.OverallWidth = width;
+            planData.OverallDepth = depth;
+
+            // Count stories (levels)
+            planData.Stories = CountStories(curDoc);
+
+            // Count bedrooms and bathrooms
+            GetRoomCounts(curDoc, out int bedrooms, out decimal bathrooms);
+            planData.Bedrooms = bedrooms;
+            planData.Bathrooms = bathrooms;
+
+            // Count garage bays
+            planData.GarageBays = CountGarageBays(curDoc);
+
+            // Calculate areas
+            planData.LivingArea = GetLivingArea(curDoc);
+            planData.TotalArea = GetTotalArea(curDoc);
+
+            return planData;
+        }
+
+        private void GetBuildingDimensions(Document curDoc, out string width, out string depth)
+        {
             throw new NotImplementedException();
         }
+
+        private int CountStories(Document curDoc)
+        {
+            throw new NotImplementedException();
+        }
+
+        private void GetRoomCounts(Document curDoc, out int bedrooms, out decimal bathrooms)
+        {
+            throw new NotImplementedException();
+        }
+
+        private int CountGarageBays(Document curDoc)
+        {
+            throw new NotImplementedException();
+        }       
+
+        private int GetTotalArea(Document curDoc)
+        {
+            throw new NotImplementedException();
+        }
+
+        private int GetLivingArea(Document curDoc)
+        {
+            throw new NotImplementedException();
+        }        
 
         #endregion
 
