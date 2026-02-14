@@ -1,16 +1,4 @@
-﻿using Autodesk.Revit.Attributes;
-using Autodesk.Revit.DB;
-using Autodesk.Revit.DB.Architecture;
-using Autodesk.Revit.UI;
-using FilterTreeControlWPF;
-using PlanQuery.Common;
-using System;
-using System.Collections.Generic;
-using System.Data.OleDb;
-using System.Linq;
-using System.Windows.Controls;
-
-namespace PlanQuery
+﻿namespace PlanQuery
 {
     [Transaction(TransactionMode.Manual)]
     public class Command2 : IExternalCommand
