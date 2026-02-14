@@ -403,6 +403,54 @@ namespace PlanQuery
         #region Database Operations
 
         /// <summary>
+        /// Check if plan already exists in database
+        /// </summary>
+        private bool PlanExistsInDatabase(string planName, string specLevel)
+        {
+            string query = "SELECT COUNT(*) FROM HousePlans WHERE PlanName = @PlanName AND SpecLevel = @SpecLevel";
+
+            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
+            using (OleDbCommand cmd = new OleDbCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@PlanName", planName);
+                cmd.Parameters.AddWithValue("@SpecLevel", specLevel);
+
+                conn.Open();
+                int count = (int)cmd.ExecuteScalar();
+                return count > 0;
+            }
+        }
+
+        /// <summary>
+        /// Update existing plan in database
+        /// </summary>
+        private void UpdatePlanInDatabase(clsPlanData planData)
+        {
+            string query = @"
+                UPDATE HousePlans 
+                SET Client = @Client, 
+                    Division = @Division, 
+                    Subdivision = @Subdivision,
+                    OverallWidth = @OverallWidth, 
+                    OverallDepth = @OverallDepth, 
+                    Stories = @Stories, 
+                    Bedrooms = @Bedrooms, 
+                    Bathrooms = @Bathrooms, 
+                    GarageBays = @GarageBays, 
+                    LivingArea = @LivingArea,
+                    TotalArea = @TotalArea
+                WHERE PlanName = @PlanName AND SpecLevel = @SpecLevel";
+
+            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
+            using (OleDbCommand cmd = new OleDbCommand(query, conn))
+            {
+                AddParametersToCommand(cmd, planData);
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>
         /// Insert new plan into database
         /// </summary>
         private void InsertPlanIntoDatabase(clsPlanData planData)
@@ -416,20 +464,35 @@ namespace PlanQuery
             using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
             using (OleDbCommand cmd = new OleDbCommand(query, conn))
             {
-                AddParametersToCommand(cmd, plan);
+                AddParametersToCommand(cmd, planData);
                 conn.Open();
                 cmd.ExecuteNonQuery();
             }
         }
 
-        private void UpdatePlanInDatabase(clsPlanData planData)
+        private string GetConnectionString()
         {
-            throw new NotImplementedException();
+            return $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={dbFilePath};Persist Security Info=False;";
         }
 
-        private bool PlanExistsInDatabase(string planName, string specLevel)
+        /// <summary>
+        /// Add parameters to SQL command
+        /// </summary>
+        private void AddParametersToCommand(OleDbCommand cmd, clsPlanData plan)
         {
-            throw new NotImplementedException();
+            cmd.Parameters.AddWithValue("@PlanName", plan.PlanName);
+            cmd.Parameters.AddWithValue("@SpecLevel", plan.SpecLevel);
+            cmd.Parameters.AddWithValue("@Client", plan.Client);
+            cmd.Parameters.AddWithValue("@Division", plan.Division);
+            cmd.Parameters.AddWithValue("@Subdivision", plan.Subdivision);
+            cmd.Parameters.AddWithValue("@OverallWidth", plan.OverallWidth);
+            cmd.Parameters.AddWithValue("@OverallDepth", plan.OverallDepth);
+            cmd.Parameters.AddWithValue("@Stories", plan.Stories);
+            cmd.Parameters.AddWithValue("@Bedrooms", plan.Bedrooms);
+            cmd.Parameters.AddWithValue("@Bathrooms", plan.Bathrooms);
+            cmd.Parameters.AddWithValue("@GarageBays", plan.GarageBays);
+            cmd.Parameters.AddWithValue("@LivingArea", plan.LivingArea);
+            cmd.Parameters.AddWithValue("@TotalArea", plan.TotalArea);
         }
 
         #endregion
@@ -457,10 +520,6 @@ namespace PlanQuery
             return Utils.TaskDialogAccept("Plan Query", "Confirm Plan Data", message);
         }
 
-        
-
-
-
         internal static PushButtonData GetButtonData()
         {
             // use this method to define the properties for this command in the Revit ribbon
@@ -478,5 +537,4 @@ namespace PlanQuery
             return myButtonData.Data;
         }
     }
-
 }
