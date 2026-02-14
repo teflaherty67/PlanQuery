@@ -100,7 +100,7 @@
             TaskDialog m_Dialog = new TaskDialog(tdName);
 
             // Set the warning icon to indicate this is a warning message
-            m_Dialog.MainIcon = TaskDialogIcon.TaskDialogIconWarning;
+            m_Dialog.MainIcon = Icon.TaskDialogIconInformation;
 
             // Set the custom title for the dialog
             m_Dialog.Title = tdTitle;

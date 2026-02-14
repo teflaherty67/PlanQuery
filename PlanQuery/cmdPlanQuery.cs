@@ -1,10 +1,6 @@
 ﻿using Autodesk.Revit.DB.Architecture;
 using PlanQuery.Common;
 using System.Data.OleDb;
-using System.Drawing.Text;
-using System.Net.NetworkInformation;
-using System.Numerics;
-using System.Windows.Controls;
 
 namespace PlanQuery
 {
