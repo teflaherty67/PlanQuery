@@ -49,6 +49,42 @@
 
         #endregion
 
+        #region Schedules
+
+        /// <summary>
+        /// Find the Floor Areas schedule that contains non-zero area values
+        /// </summary>
+        internal static ViewSchedule GetFloorAreaSchedule(Document curDoc)
+        {
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewSchedule));
+
+            foreach (ViewSchedule vs in collector.Cast<ViewSchedule>())
+            {
+                if (!vs.Name.StartsWith("Floor Areas", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                TableData tableData = vs.GetTableData();
+                TableSectionData bodyData = tableData.GetSectionData(SectionType.Body);
+
+                int rowCount = bodyData.NumberOfRows;
+                int areaCol = bodyData.NumberOfColumns - 1;
+
+                for (int row = 0; row < rowCount; row++)
+                {
+                    string areaText = bodyData.GetCellText(row, areaCol).Trim();
+                    string cleaned = areaText.Replace("SF", "").Trim();
+
+                    if (int.TryParse(cleaned, out int areaValue) && areaValue > 0)
+                        return vs;
+                }
+            }
+
+            return null;
+        }
+
+        #endregion
+
         #region Task Dialog
 
         /// <summary>

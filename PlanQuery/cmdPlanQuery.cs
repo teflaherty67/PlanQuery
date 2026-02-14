@@ -1,6 +1,9 @@
-﻿using PlanQuery.Common;
+﻿using Autodesk.Revit.DB.Architecture;
+using PlanQuery.Common;
+using System.Data.OleDb;
 using System.Drawing.Text;
 using System.Net.NetworkInformation;
+using System.Numerics;
 using System.Windows.Controls;
 
 namespace PlanQuery
@@ -185,41 +188,238 @@ namespace PlanQuery
             }
         }
 
-        private string FormatDimension(double widthFeet)
+        /// <summary>
+        /// Convert decimal feet to formatted dimension string (e.g., "65'-8 1/2\"")
+        /// </summary>
+        private string FormatDimension(double decimalFeet)
         {
-            throw new NotImplementedException();
+            // Get whole feet
+            int feet = (int)Math.Floor(decimalFeet);
+
+            // Get remaining inches
+            double remainingFeet = decimalFeet - feet;
+            double totalInches = remainingFeet * 12.0;
+
+            // Get whole inches
+            int inches = (int)Math.Floor(totalInches);
+
+            // Get fraction of inch (round to nearest 1/2")
+            double remainingInches = totalInches - inches;
+            string fraction = "";
+
+            if (remainingInches >= 0.25 && remainingInches < 0.75)
+            {
+                fraction = " 1/2";
+            }
+            else if (remainingInches >= 0.75)
+            {
+                inches++;
+            }
+
+            // Handle inch overflow
+            if (inches >= 12)
+            {
+                feet++;
+                inches -= 12;
+            }
+
+            return $"{feet}'-{inches}{fraction}\"";
         }
 
+        /// <summary>
+        /// Count number of stories in the model
+        /// </summary>
         private int CountStories(Document curDoc)
         {
-            throw new NotImplementedException();
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Level));
+
+            // Filter out levels that are not stories (exclude roof, foundation, etc.)
+            var levels = collector.Cast<Level>()
+                .Where(l => !l.Name.ToLower().Contains("roof") &&
+                           !l.Name.ToLower().Contains("foundation") &&
+                           !l.Name.ToLower().Contains("base") &&
+                           !l.Name.ToLower().Contains("plate"))
+                .ToList();
+
+            return levels.Count;
         }
 
+        /// <summary>
+        /// Count bedrooms and bathrooms from room elements
+        /// </summary>
         private void GetRoomCounts(Document curDoc, out int bedrooms, out decimal bathrooms)
         {
-            throw new NotImplementedException();
+            bedrooms = 0;
+            decimal fullBaths = 0;
+            decimal halfBaths = 0;
+
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Room));
+
+            foreach (Room room in collector.Cast<Room>())
+            {
+                if (room.Area <= 0) continue; // Skip unplaced rooms
+
+                string roomName = room.Name.ToLower();
+
+                // Count bedrooms
+                if (roomName.Contains("bedroom") || roomName.Contains("bed"))
+                {
+                    bedrooms++;
+                }
+
+                // Count bathrooms
+                if (roomName.Contains("bath"))
+                {
+                    if (roomName.Contains("powder") || roomName.Contains("half"))
+                    {
+                        halfBaths++;
+                    }
+                    else
+                    {
+                        fullBaths++;
+                    }
+                }
+            }
+
+            bathrooms = fullBaths + (halfBaths * 0.5m);
         }
 
+        /// <summary>
+        /// Count garage bays
+        /// </summary>
         private int CountGarageBays(Document curDoc)
         {
-            throw new NotImplementedException();
-        }       
+            int garageBays = 0;
 
-        private int GetTotalArea(Document curDoc)
-        {
-            throw new NotImplementedException();
+            FilteredElementCollector roomCollector = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(Room));
+
+            foreach (Room room in roomCollector.Cast<Room>())
+            {
+                if (room.Area <= 0) continue;
+
+                string roomName = room.Name.ToLower();
+                if (roomName.Contains("garage"))
+                {
+                    if (roomName.Contains("three"))
+                        garageBays += 3;
+                    else if (roomName.Contains("two"))
+                        garageBays += 2;
+                    else if (roomName.Contains("one"))
+                        garageBays += 1;
+                }
+            }
+
+            return garageBays;
         }
 
+        /// <summary>
+        /// Get living area from the Floor Areas schedule
+        /// </summary>
         private int GetLivingArea(Document curDoc)
         {
-            throw new NotImplementedException();
-        }        
+            ViewSchedule schedule = Utils.GetFloorAreaSchedule(curDoc);
+            if (schedule == null) return 0;
+
+            TableData tableData = schedule.GetTableData();
+            TableSectionData bodyData = tableData.GetSectionData(SectionType.Body);
+
+            int rowCount = bodyData.NumberOfRows;
+            int areaCol = bodyData.NumberOfColumns - 1;
+
+            for (int row = 0; row < rowCount; row++)
+            {
+                string cellName = bodyData.GetCellText(row, 0).Trim();
+
+                if (cellName.Equals("Living", StringComparison.OrdinalIgnoreCase))
+                {
+                    // 1-story: area is on the same row as "Living"
+                    string areaText = bodyData.GetCellText(row, areaCol).Trim();
+                    if (!string.IsNullOrEmpty(areaText))
+                        return ParseAreaValue(areaText);
+
+                    // Multi-story: scan forward for subtotal row (blank name with area value)
+                    for (int subRow = row + 1; subRow < rowCount; subRow++)
+                    {
+                        string subName = bodyData.GetCellText(subRow, 0).Trim();
+                        string subArea = bodyData.GetCellText(subRow, areaCol).Trim();
+
+                        // Hit another section header — stop scanning
+                        if (!string.IsNullOrEmpty(subName) && !subName.Contains("Floor"))
+                            break;
+
+                        // Subtotal row: blank name with an area value
+                        if (string.IsNullOrEmpty(subName) && !string.IsNullOrEmpty(subArea))
+                            return ParseAreaValue(subArea);
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// Get total covered area from the Floor Areas schedule
+        /// </summary>
+        private int GetTotalArea(Document curDoc)
+        {
+            ViewSchedule schedule = Utils.GetFloorAreaSchedule(curDoc);
+            if (schedule == null) return 0;
+
+            TableData tableData = schedule.GetTableData();
+            TableSectionData bodyData = tableData.GetSectionData(SectionType.Body);
+
+            int rowCount = bodyData.NumberOfRows;
+            int areaCol = bodyData.NumberOfColumns - 1;
+
+            for (int row = 0; row < rowCount; row++)
+            {
+                string cellName = bodyData.GetCellText(row, 0).Trim();
+
+                if (cellName.Equals("Total Covered", StringComparison.OrdinalIgnoreCase))
+                    return ParseAreaValue(bodyData.GetCellText(row, areaCol).Trim());
+            }
+
+            return 0;
+        }
+
+        /// <summary>
+        /// Parse area text like "2206 SF" to integer
+        /// </summary>
+        private int ParseAreaValue(string areaText)
+        {
+            string cleaned = areaText.Replace("SF", "").Trim();
+
+            if (int.TryParse(cleaned, out int result))
+                return result;
+
+            return 0;
+        }
 
         #endregion
 
+        #region Database Operations
+
+        /// <summary>
+        /// Insert new plan into database
+        /// </summary>
         private void InsertPlanIntoDatabase(clsPlanData planData)
         {
-            throw new NotImplementedException();
+            string query = @"
+                INSERT INTO HousePlans 
+                (PlanName, SpecLevel, Client, Division, Subdivision, OverallWidth, OverallDepth, Stories, Bedrooms, Bathrooms, GarageBays, LivingArea, TotalArea)
+                VALUES 
+                (@PlanName, @SpecLevel, @Client, @Division, @Subdivision, @OverallWidth, @OverallDepth, @Stories, @Bedrooms, @Bathrooms, @GarageBays, @LivingArea, @TotalArea)";
+
+            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
+            using (OleDbCommand cmd = new OleDbCommand(query, conn))
+            {
+                AddParametersToCommand(cmd, plan);
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
         }
 
         private void UpdatePlanInDatabase(clsPlanData planData)
@@ -231,6 +431,8 @@ namespace PlanQuery
         {
             throw new NotImplementedException();
         }
+
+        #endregion
 
         private bool ShowConfirmationDialog(clsPlanData planData)
         {
