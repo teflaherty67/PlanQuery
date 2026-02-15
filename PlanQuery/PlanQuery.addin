@@ -4,7 +4,7 @@
     <Text>PlanQuery - Command 1</Text>
     <Description>Some description</Description>
     <Assembly>PlanQuery\PlanQuery.dll</Assembly>
-    <FullClassName>PlanQuery.Command1</FullClassName>
+    <FullClassName>PlanQuery.cmdPlanQuery</FullClassName>
     <ClientId>82c251c2-ca7d-41aa-9f5c-767bb78b1aee</ClientId>
     <VendorId>com.YOUR COMPANY NAME</VendorId>
     <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
