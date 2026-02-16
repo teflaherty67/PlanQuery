@@ -1,4 +1,7 @@
-﻿namespace PlanQuery.Common
+﻿using Autodesk.Revit.DB;
+using Autodesk.Revit.DB.Architecture;
+
+namespace PlanQuery.Common
 {
     internal static class Utils
     {
@@ -45,6 +48,44 @@
                 }
 
             return "";
+        }
+
+        public static List<ParameterData> GetAllProjectParameters(Document curDoc)
+        {
+            if (curDoc.IsFamilyDocument)
+            {
+                TaskDialog.Show("Error", "Cannot be a family curDocument.");
+                return null;
+            }
+
+            List<ParameterData> paraList = new List<ParameterData>();
+
+            BindingMap map = curDoc.ParameterBindings;
+            DefinitionBindingMapIterator iter = map.ForwardIterator();
+            iter.Reset();
+            while (iter.MoveNext())
+            {
+                ParameterData pd = new ParameterData();
+                pd.def = iter.Key;
+                pd.name = iter.Key.Name;
+                pd.binding = iter.Current as ElementBinding;
+                paraList.Add(pd);
+            }
+
+            return paraList;
+        }
+
+        public static bool DoesProjectParamExist(Document curDoc, string pName)
+        {
+            List<ParameterData> pdList = GetAllProjectParameters(curDoc);
+            foreach (ParameterData pd in pdList)
+            {
+                if (pd.name == pName)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         #endregion
@@ -209,7 +250,7 @@
 
             // Display the dialog and capture the result (though we don't use it for warnings)
             TaskDialogResult m_DialogResult = m_Dialog.Show();
-        }
+        }       
 
         #endregion
     }
