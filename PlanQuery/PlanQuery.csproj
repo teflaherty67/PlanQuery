@@ -15,30 +15,6 @@
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 </PropertyGroup>
 
-<PropertyGroup Condition="$(Configuration.Contains('R20'))">
-	<RevitVersion>2020</RevitVersion>
-	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2020</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R21'))">
-    	<RevitVersion>2021</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-    	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2021</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R22'))">
-    	<RevitVersion>2022</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2022</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R23'))">
-	<RevitVersion>2023</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2023</DefineConstants>
-</PropertyGroup>
 <PropertyGroup Condition="$(Configuration.Contains('R24'))">
 	<RevitVersion>2024</RevitVersion>
     	<TargetFramework>net48</TargetFramework>
@@ -90,12 +66,12 @@
 </ItemGroup>
 	
 <ItemGroup>
-    <PackageReference Include="System.Drawing.Common" Version="8.0.3" IncludeAssets="build; compile" PrivateAssets="All" />
-    <PackageReference Include="Revit_All_Main_Versions_API_x64" Version="$(RevitVersion).*" IncludeAssets="build; compile"       	PrivateAssets="All" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.3" IncludeAssets="compile; build" PrivateAssets="all" />
+    <PackageReference Include="Revit_All_Main_Versions_API_x64" Version="$(RevitVersion).*" IncludeAssets="build; compile" PrivateAssets="All" />
 </ItemGroup>
 
 <ItemGroup Condition="$(Configuration.Contains('R25')) Or $(Configuration.Contains('R26'))">
-    <PackageReference Include="System.Data.OleDb" Version="8.0.0" />
+  <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
 </ItemGroup>
 	
 <PropertyGroup>
