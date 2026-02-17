@@ -106,9 +106,9 @@ namespace PlanQuery
             planData.PlanName = Utils.GetParameterValueByName(curProjInfo, "Project Name");
 
             planData.SpecLevel = Utils.GetParameterValueByName(curProjInfo, "Spec Level");
-            planData.Client = Utils.GetParameterValueByName(curProjInfo, "Client");
-            planData.Division = Utils.GetParameterValueByName(curProjInfo, "Division");
-            planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Subdivision");
+            planData.Client = Utils.GetParameterValueByName(curProjInfo, "Client Name");
+            planData.Division = Utils.GetParameterValueByName(curProjInfo, "Client Division");
+            planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Client Subdivision");
 
             // Get overall building dimensions
             GetBuildingDimensions(curDoc, out string width, out string depth);
@@ -251,31 +251,24 @@ namespace PlanQuery
             decimal halfBaths = 0;
 
             FilteredElementCollector collector = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Room));
+                .OfClass(typeof(SpatialElement))
+                .WhereElementIsNotElementType();
 
-            foreach (Room room in collector.Cast<Room>())
+            foreach (Room room in collector.OfType<Room>())
             {
-                if (room.Area <= 0) continue; // Skip unplaced rooms
+                if (room.Area <= 0) continue;
 
                 string roomName = room.Name.ToLower();
 
-                // Count bedrooms
                 if (roomName.Contains("bedroom") || roomName.Contains("bed"))
-                {
                     bedrooms++;
-                }
 
-                // Count bathrooms
                 if (roomName.Contains("bath"))
                 {
                     if (roomName.Contains("powder") || roomName.Contains("half"))
-                    {
                         halfBaths++;
-                    }
                     else
-                    {
                         fullBaths++;
-                    }
                 }
             }
 
@@ -289,10 +282,11 @@ namespace PlanQuery
         {
             int garageBays = 0;
 
-            FilteredElementCollector roomCollector = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Room));
+            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(SpatialElement))
+                .WhereElementIsNotElementType();
 
-            foreach (Room room in roomCollector.Cast<Room>())
+            foreach (Room room in collector.OfType<Room>())
             {
                 if (room.Area <= 0) continue;
 
