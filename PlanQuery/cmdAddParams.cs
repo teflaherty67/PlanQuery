@@ -3,7 +3,7 @@
 namespace PlanQuery
 {
     [Transaction(TransactionMode.Manual)]
-    public class cmdAddParameters : IExternalCommand
+    public class cmdAddParams : IExternalCommand
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {

@@ -13,7 +13,7 @@
     <Text>PlanQuery - Command 2</Text>
     <Description>Some description</Description>
     <Assembly>PlanQuery\PlanQuery.dll</Assembly>
-    <FullClassName>PlanQuery.Command2</FullClassName>
+    <FullClassName>PlanQuery.cmdAddParams</FullClassName>
     <ClientId>87387b3e-15fd-44ef-b3ad-d57dd6f3370a</ClientId>
     <VendorId>com.YOUR COMPANY NAME</VendorId>
     <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
