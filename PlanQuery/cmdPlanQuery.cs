@@ -1,6 +1,7 @@
 ﻿using Autodesk.Revit.DB.Architecture;
 using PlanQuery.Common;
 using Microsoft.Data.SqlClient;
+using System.Data.OleDb;
 
 namespace PlanQuery
 {
@@ -12,8 +13,10 @@ namespace PlanQuery
 
     public class cmdPlanQuery : IExternalCommand
     {
-        private const string SqlConnStr =
-            "Server=tcp:placeholder.database.windows.net,1433;Initial Catalog=PlanQuery;User ID=fake;Password=fake;Encrypt=True;TrustServerCertificate=False;Connection Timeout=5;";
+        private const string dbFilePath = @"S:\Shared Folders\Lifestyle USA Design\HousePlans.accdb";
+
+        //private const string SqlConnStr =
+        //    "Server=tcp:placeholder.database.windows.net,1433;Initial Catalog=PlanQuery;User ID=fake;Password=fake;Encrypt=True;TrustServerCertificate=False;Connection Timeout=5;";
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -381,56 +384,88 @@ namespace PlanQuery
 
         #endregion
 
-        #region Database Operations        
+        #region Database Operations
 
-        private void UpsertPlan(clsPlanData p)
+        private bool PlanExistsInDatabase(string planName, string specLevel)
         {
-            const string sql = @"
-MERGE dbo.HousePlans AS tgt
-USING (SELECT
-    @PlanName AS PlanName,
-    @SpecLevel AS SpecLevel,
-    @Subdivision AS Subdivision
-) AS src
-ON (tgt.PlanName = src.PlanName AND tgt.SpecLevel = src.SpecLevel AND tgt.Subdivision = src.Subdivision)
-WHEN MATCHED THEN
-    UPDATE SET
-        Client       = @Client,
-        Division     = @Division,
-        OverallWidth = @OverallWidth,
-        OverallDepth = @OverallDepth,
-        Stories      = @Stories,
-        Bedrooms     = @Bedrooms,
-        Bathrooms    = @Bathrooms,
-        GarageBays   = @GarageBays,
-        LivingArea   = @LivingArea,
-        TotalArea    = @TotalArea,
-        LastUpdated  = sysdatetime()
-WHEN NOT MATCHED THEN
-    INSERT (PlanName, SpecLevel, Client, Division, Subdivision, OverallWidth, OverallDepth, Stories, Bedrooms, Bathrooms, GarageBays, LivingArea, TotalArea)
-    VALUES (@PlanName, @SpecLevel, @Client, @Division, @Subdivision, @OverallWidth, @OverallDepth, @Stories, @Bedrooms, @Bathrooms, @GarageBays, @LivingArea, @TotalArea);";
+            string query = "SELECT COUNT(*) FROM HousePlans WHERE PlanName = ? AND SpecLevel = ?";
 
-            using var conn = new SqlConnection(SqlConnStr);
-            using var cmd = new SqlCommand(sql, conn);
+            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
+            using (OleDbCommand cmd = new OleDbCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("?", planName);
+                cmd.Parameters.AddWithValue("?", specLevel);
 
-            cmd.Parameters.AddWithValue("@PlanName", p.PlanName);
-            cmd.Parameters.AddWithValue("@SpecLevel", p.SpecLevel);
-            cmd.Parameters.AddWithValue("@Subdivision", p.Subdivision);
+                conn.Open();
+                int count = (int)cmd.ExecuteScalar();
+                return count > 0;
+            }
+        }
 
-            cmd.Parameters.AddWithValue("@Client", (object?)p.Client ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Division", (object?)p.Division ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@OverallWidth", (object?)p.OverallWidth ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@OverallDepth", (object?)p.OverallDepth ?? DBNull.Value);
+        private void UpdatePlanInDatabase(clsPlanData planData)
+        {
+            string query = @"
+        UPDATE HousePlans 
+        SET Client = ?, Division = ?, Subdivision = ?,
+            OverallWidth = ?, OverallDepth = ?, Stories = ?, 
+            Bedrooms = ?, Bathrooms = ?, GarageBays = ?, 
+            LivingArea = ?, TotalArea = ?
+        WHERE PlanName = ? AND SpecLevel = ?";
 
-            cmd.Parameters.AddWithValue("@Stories", p.Stories);
-            cmd.Parameters.AddWithValue("@Bedrooms", p.Bedrooms);
-            cmd.Parameters.AddWithValue("@Bathrooms", p.Bathrooms);
-            cmd.Parameters.AddWithValue("@GarageBays", p.GarageBays);
-            cmd.Parameters.AddWithValue("@LivingArea", p.LivingArea);
-            cmd.Parameters.AddWithValue("@TotalArea", p.TotalArea);
+            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
+            using (OleDbCommand cmd = new OleDbCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("?", planData.Client);
+                cmd.Parameters.AddWithValue("?", planData.Division);
+                cmd.Parameters.AddWithValue("?", planData.Subdivision);
+                cmd.Parameters.AddWithValue("?", planData.OverallWidth);
+                cmd.Parameters.AddWithValue("?", planData.OverallDepth);
+                cmd.Parameters.AddWithValue("?", planData.Stories);
+                cmd.Parameters.AddWithValue("?", planData.Bedrooms);
+                cmd.Parameters.AddWithValue("?", planData.Bathrooms);
+                cmd.Parameters.AddWithValue("?", planData.GarageBays);
+                cmd.Parameters.AddWithValue("?", planData.LivingArea);
+                cmd.Parameters.AddWithValue("?", planData.TotalArea);
+                cmd.Parameters.AddWithValue("?", planData.PlanName);
+                cmd.Parameters.AddWithValue("?", planData.SpecLevel);
 
-            conn.Open();
-            cmd.ExecuteNonQuery();
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private void InsertPlanIntoDatabase(clsPlanData planData)
+        {
+            string query = @"
+        INSERT INTO HousePlans 
+        (PlanName, SpecLevel, Client, Division, Subdivision, OverallWidth, OverallDepth, Stories, Bedrooms, Bathrooms, GarageBays, LivingArea, TotalArea)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
+            using (OleDbCommand cmd = new OleDbCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("?", planData.PlanName);
+                cmd.Parameters.AddWithValue("?", planData.SpecLevel);
+                cmd.Parameters.AddWithValue("?", planData.Client);
+                cmd.Parameters.AddWithValue("?", planData.Division);
+                cmd.Parameters.AddWithValue("?", planData.Subdivision);
+                cmd.Parameters.AddWithValue("?", planData.OverallWidth);
+                cmd.Parameters.AddWithValue("?", planData.OverallDepth);
+                cmd.Parameters.AddWithValue("?", planData.Stories);
+                cmd.Parameters.AddWithValue("?", planData.Bedrooms);
+                cmd.Parameters.AddWithValue("?", planData.Bathrooms);
+                cmd.Parameters.AddWithValue("?", planData.GarageBays);
+                cmd.Parameters.AddWithValue("?", planData.LivingArea);
+                cmd.Parameters.AddWithValue("?", planData.TotalArea);
+
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private string GetConnectionString()
+        {
+            return $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={dbFilePath};Persist Security Info=False;";
         }
 
         #endregion
