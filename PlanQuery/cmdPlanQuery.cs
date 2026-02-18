@@ -1,17 +1,25 @@
 ﻿using Autodesk.Revit.DB.Architecture;
 using PlanQuery.Common;
-using System.Data.OleDb;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace PlanQuery
 {
     /// <summary>
-    /// Revit command to extract plan data from active model and save to Access database
+    /// Revit command to extract plan data from active model and save to Airtable
     /// Requires: clsPlanData.cs
     /// </summary>
     [Transaction(TransactionMode.Manual)]
     public class cmdPlanQuery : IExternalCommand
     {
-        private const string DbFilePath = @"S:\Shared Folders\Lifestyle USA Design\HousePlans.accdb";
+        private const string AirtableApiKey = "your-token-here";
+        private const string AirtableBaseId = "appwAYciO1uHJiC7u";
+        private const string AirtableTable = "tblCGlniNbnq76ifv";
+
+        private static readonly HttpClient _http = new HttpClient();
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
@@ -21,7 +29,6 @@ namespace PlanQuery
 
             try
             {
-                // Extract plan data from the active Revit model
                 clsPlanData planData = ExtractPlanData(curDoc);
 
                 if (planData == null)
@@ -30,7 +37,6 @@ namespace PlanQuery
                     return Result.Failed;
                 }
 
-                // Validate required fields before saving
                 if (string.IsNullOrWhiteSpace(planData.PlanName) ||
                     string.IsNullOrWhiteSpace(planData.SpecLevel) ||
                     string.IsNullOrWhiteSpace(planData.Client) ||
@@ -44,12 +50,12 @@ namespace PlanQuery
                     return Result.Failed;
                 }
 
-                // Show confirmation dialog before saving
                 if (!ShowConfirmationDialog(planData))
                     return Result.Cancelled;
 
-                // Check if plan already exists in the database
-                if (PlanExistsInDatabase(planData.PlanName, planData.SpecLevel, planData.Subdivision))
+                string existingRecordId = FindExistingRecord(planData.PlanName, planData.SpecLevel, planData.Subdivision);
+
+                if (existingRecordId != null)
                 {
                     string existsMessage =
                         $"Plan '{planData.PlanName}' with spec '{planData.SpecLevel}' already exists " +
@@ -58,15 +64,15 @@ namespace PlanQuery
                     if (!Utils.TaskDialogAccept("Plan Query", "Plan Exists", existsMessage))
                         return Result.Cancelled;
 
-                    UpdatePlanInDatabase(planData);
+                    UpdateRecord(existingRecordId, planData);
                     Utils.TaskDialogInformation("Plan Query", "Success",
-                        $"Updated plan '{planData.PlanName}' in database.");
+                        $"Updated plan '{planData.PlanName}' in Airtable.");
                 }
                 else
                 {
-                    InsertPlanIntoDatabase(planData);
+                    InsertRecord(planData);
                     Utils.TaskDialogInformation("Plan Query", "Success",
-                        $"Added plan '{planData.PlanName}' to database.");
+                        $"Added plan '{planData.PlanName}' to Airtable.");
                 }
 
                 return Result.Succeeded;
@@ -186,7 +192,8 @@ namespace PlanQuery
             decimal halfBaths = 0;
 
             foreach (Room room in new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Room)).Cast<Room>())
+                .OfClass(typeof(SpatialElement))
+                .OfType<Room>())
             {
                 if (room.Area <= 0) continue;
 
@@ -212,7 +219,8 @@ namespace PlanQuery
             int bays = 0;
 
             foreach (Room room in new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Room)).Cast<Room>())
+                .OfClass(typeof(SpatialElement))
+                .OfType<Room>())
             {
                 if (room.Area <= 0) continue;
 
@@ -241,11 +249,9 @@ namespace PlanQuery
                 if (!body.GetCellText(row, 0).Trim().Equals("Living", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                // 1-story: area is on the same row as "Living"
                 string areaText = body.GetCellText(row, areaCol).Trim();
                 if (!string.IsNullOrEmpty(areaText)) return ParseAreaValue(areaText);
 
-                // Multi-story: scan forward for subtotal row
                 for (int sub = row + 1; sub < rowCount; sub++)
                 {
                     string subName = body.GetCellText(sub, 0).Trim();
@@ -286,105 +292,83 @@ namespace PlanQuery
 
         #endregion
 
-        #region Database Operations
+        #region Airtable Operations
 
-        private bool PlanExistsInDatabase(string planName, string specLevel, string subdivision)
+        /// <summary>
+        /// Returns the Airtable record ID if a matching plan exists, otherwise null.
+        /// Uniqueness is PlanName + SpecLevel + Subdivision.
+        /// </summary>
+        private string FindExistingRecord(string planName, string specLevel, string subdivision)
         {
-            string query = "SELECT COUNT(*) FROM HousePlans " +
-                           "WHERE PlanName = ? AND SpecLevel = ? AND Subdivision = ?";
+            string formula = $"AND({{PlanName}}=\"{planName}\",{{SpecLevel}}=\"{specLevel}\",{{Subdivision}}=\"{subdivision}\")";
+            string url = $"https://api.airtable.com/v0/{AirtableBaseId}/{AirtableTable}" +
+                             $"?filterByFormula={Uri.EscapeDataString(formula)}&maxRecords=1";
 
-            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
-            using (OleDbCommand cmd = new OleDbCommand(query, conn))
-            {
-                // Positional order must match the ? placeholders in the query above
-                cmd.Parameters.AddWithValue("@PlanName", planName);
-                cmd.Parameters.AddWithValue("@SpecLevel", specLevel);
-                cmd.Parameters.AddWithValue("@Subdivision", subdivision);
+            HttpRequestMessage request = BuildRequest(HttpMethod.Get, url);
+            HttpResponseMessage response = _http.Send(request);
+            response.EnsureSuccessStatusCode();
 
-                conn.Open();
-                int count = (int)cmd.ExecuteScalar();
-                return count > 0;
-            }
+            string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            JsonNode root = JsonNode.Parse(json);
+            JsonArray records = root["records"]?.AsArray();
+
+            return (records != null && records.Count > 0)
+                ? records[0]["id"]?.GetValue<string>()
+                : null;
         }
 
-        private void InsertPlanIntoDatabase(clsPlanData plan)
+        private void InsertRecord(clsPlanData plan)
         {
-            string query = @"
-                INSERT INTO HousePlans 
-                    (PlanName, SpecLevel, Client, Division, Subdivision,
-                     OverallWidth, OverallDepth, Stories, Bedrooms, Bathrooms,
-                     GarageBays, LivingArea, TotalArea)
-                VALUES 
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            string url = $"https://api.airtable.com/v0/{AirtableBaseId}/{AirtableTable}";
+            string body = BuildRecordJson(plan);
 
-            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
-            using (OleDbCommand cmd = new OleDbCommand(query, conn))
-            {
-                // Positional order must match the column list above
-                cmd.Parameters.AddWithValue("@PlanName", plan.PlanName);
-                cmd.Parameters.AddWithValue("@SpecLevel", plan.SpecLevel);
-                cmd.Parameters.AddWithValue("@Client", plan.Client);
-                cmd.Parameters.AddWithValue("@Division", plan.Division);
-                cmd.Parameters.AddWithValue("@Subdivision", plan.Subdivision);
-                cmd.Parameters.AddWithValue("@OverallWidth", plan.OverallWidth);
-                cmd.Parameters.AddWithValue("@OverallDepth", plan.OverallDepth);
-                cmd.Parameters.AddWithValue("@Stories", plan.Stories);
-                cmd.Parameters.AddWithValue("@Bedrooms", plan.Bedrooms);
-                cmd.Parameters.AddWithValue("@Bathrooms", plan.Bathrooms);
-                cmd.Parameters.AddWithValue("@GarageBays", plan.GarageBays);
-                cmd.Parameters.AddWithValue("@LivingArea", plan.LivingArea);
-                cmd.Parameters.AddWithValue("@TotalArea", plan.TotalArea);
-
-                conn.Open();
-                cmd.ExecuteNonQuery();
-            }
+            HttpRequestMessage request = BuildRequest(HttpMethod.Post, url, body);
+            HttpResponseMessage response = _http.Send(request);
+            response.EnsureSuccessStatusCode();
         }
 
-        private void UpdatePlanInDatabase(clsPlanData plan)
+        private void UpdateRecord(string recordId, clsPlanData plan)
         {
-            string query = @"
-                UPDATE HousePlans 
-                SET Client        = ?,
-                    Division      = ?,
-                    OverallWidth  = ?,
-                    OverallDepth  = ?,
-                    Stories       = ?,
-                    Bedrooms      = ?,
-                    Bathrooms     = ?,
-                    GarageBays    = ?,
-                    LivingArea    = ?,
-                    TotalArea     = ?
-                WHERE PlanName    = ? 
-                  AND SpecLevel   = ? 
-                  AND Subdivision = ?";
+            string url = $"https://api.airtable.com/v0/{AirtableBaseId}/{AirtableTable}/{recordId}";
+            string body = BuildRecordJson(plan);
 
-            using (OleDbConnection conn = new OleDbConnection(GetConnectionString()))
-            using (OleDbCommand cmd = new OleDbCommand(query, conn))
-            {
-                // SET fields first, then WHERE fields - must match the order above
-                cmd.Parameters.AddWithValue("@Client", plan.Client);
-                cmd.Parameters.AddWithValue("@Division", plan.Division);
-                cmd.Parameters.AddWithValue("@OverallWidth", plan.OverallWidth);
-                cmd.Parameters.AddWithValue("@OverallDepth", plan.OverallDepth);
-                cmd.Parameters.AddWithValue("@Stories", plan.Stories);
-                cmd.Parameters.AddWithValue("@Bedrooms", plan.Bedrooms);
-                cmd.Parameters.AddWithValue("@Bathrooms", plan.Bathrooms);
-                cmd.Parameters.AddWithValue("@GarageBays", plan.GarageBays);
-                cmd.Parameters.AddWithValue("@LivingArea", plan.LivingArea);
-                cmd.Parameters.AddWithValue("@TotalArea", plan.TotalArea);
-                // WHERE fields last
-                cmd.Parameters.AddWithValue("@PlanName", plan.PlanName);
-                cmd.Parameters.AddWithValue("@SpecLevel", plan.SpecLevel);
-                cmd.Parameters.AddWithValue("@Subdivision", plan.Subdivision);
-
-                conn.Open();
-                cmd.ExecuteNonQuery();
-            }
+            HttpRequestMessage request = BuildRequest(HttpMethod.Patch, url, body);
+            HttpResponseMessage response = _http.Send(request);
+            response.EnsureSuccessStatusCode();
         }
 
-        private string GetConnectionString()
+        private string BuildRecordJson(clsPlanData plan)
         {
-            return $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={DbFilePath};Persist Security Info=False;";
+            var fields = new Dictionary<string, object>
+            {
+                { "PlanName",     plan.PlanName              },
+                { "SpecLevel",    plan.SpecLevel             },
+                { "Client",       plan.Client                },
+                { "Division",     plan.Division              },
+                { "Subdivision",  plan.Subdivision           },
+                { "OverallWidth", plan.OverallWidth          },
+                { "OverallDepth", plan.OverallDepth          },
+                { "Stories",      plan.Stories               },
+                { "Bedrooms",     plan.Bedrooms              },
+                { "Bathrooms",    (double)plan.Bathrooms     },
+                { "GarageBays",   plan.GarageBays            },
+                { "LivingArea",   plan.LivingArea            },
+                { "TotalArea",    plan.TotalArea             }
+            };
+
+            return JsonSerializer.Serialize(new { fields });
+        }
+
+        private HttpRequestMessage BuildRequest(HttpMethod method, string url, string jsonBody = null)
+        {
+            var request = new HttpRequestMessage(method, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AirtableApiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            if (jsonBody != null)
+                request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+            return request;
         }
 
         #endregion
@@ -393,7 +377,7 @@ namespace PlanQuery
 
         private bool ShowConfirmationDialog(clsPlanData planData)
         {
-            string message = $@"Ready to save this plan to the database:
+            string message = $@"Ready to save this plan to Airtable:
 
 Plan Name:   {planData.PlanName}
 Spec Level:  {planData.SpecLevel}
@@ -425,7 +409,7 @@ Do you want to proceed?";
                 MethodBase.GetCurrentMethod().DeclaringType?.FullName,
                 Properties.Resources.Blue_32,
                 Properties.Resources.Blue_16,
-                "Extract plan data from the active model and save to the Access database");
+                "Extract plan data from the active model and save to Airtable");
 
             return myButtonData.Data;
         }
