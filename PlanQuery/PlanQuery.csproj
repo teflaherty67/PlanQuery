@@ -73,6 +73,10 @@
 <ItemGroup Condition="$(Configuration.Contains('R25')) Or $(Configuration.Contains('R26'))">
   <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
 </ItemGroup>
+
+<ItemGroup Condition="$(Configuration.Contains('R25')) Or $(Configuration.Contains('R26'))">
+    <PackageReference Include="System.Data.OleDb" Version="8.0.0" />
+</ItemGroup>
 	
 <PropertyGroup>
     <PostBuildEvent>

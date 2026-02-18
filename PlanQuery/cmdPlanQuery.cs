@@ -65,14 +65,23 @@ namespace PlanQuery
                 }
 
                 // check if plan already exists in the database before saving
-                UpsertPlan(planData);
+                if (PlanExistsInDatabase(planData.PlanName, planData.SpecLevel))
+                {
+                    string existsMessage = $"Plan '{planData.PlanName}' with spec '{planData.SpecLevel}' already exists.\n\nDo you want to update it?";
 
-                Utils.TaskDialogInformation(
-                    "Plan Query",
-                    "Success",
-                    $"Saved plan '{planData.PlanName}' (Spec: {planData.SpecLevel}, Subdivision: {planData.Subdivision})."
-                );
+                    if (!Utils.TaskDialogAccept("Plan Query", "Plan Exists", existsMessage))
+                    {
+                        return Result.Cancelled;
+                    }
 
+                    UpdatePlanInDatabase(planData);
+                    Utils.TaskDialogInformation("Plan Query", "Success", $"Updated plan '{planData.PlanName}' in database.");
+                }
+                else
+                {
+                    InsertPlanIntoDatabase(planData);
+                    Utils.TaskDialogInformation("Plan Query", "Success", $"Added plan '{planData.PlanName}' to database.");
+                }
 
                 return Result.Succeeded;
             }
