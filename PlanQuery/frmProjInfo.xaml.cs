@@ -21,30 +21,39 @@ namespace PlanQuery
     {
         #region Fields
 
-        private readonly Document _curDoc;
+        private readonly Document CurDoc;
 
         private static readonly List<string> SpecLevels = new()
         {
-            "Standard",
-            "Premium",
-            "Luxury",
-            "Custom"
+            "Complete Home",
+            "Complete Home Plus",
+            "Terrata",
+            "N/A"
         };
 
         private static readonly List<string> ClientNames = new()
         {
             // Add your client names here
-            "Client A",
-            "Client B",
-            "Client C"
+            "DRB Group",
+            "Lennar Homes",
+            "LGI Homes"
         };
 
         private static readonly List<string> ClientDivisions = new()
         {
             // Add your division names here
-            "Division 1",
-            "Division 2",
-            "Division 3"
+            "Central Texas",
+            "Dallas-Fort Worth",
+            "Florida",
+            "Houston",
+            "Maryland",
+            "Minnesota",
+            "Pensylvania",
+            "Oklahoma",
+            "Southeast",
+            "Virginia",
+            "West Virginia",
+            "Taylor"
         };
 
         private static readonly List<string> GarageLoadings = new()
@@ -56,12 +65,23 @@ namespace PlanQuery
 
         #endregion
 
+        #region Properties
+
+        public string PlanName => tbxPlanName.Text.Trim();
+        public string SpecLevel => cbxSpecLevel.Text.Trim();
+        public string ClientName => cbxClientName.Text.Trim();
+        public string ClientDivision => cbxClientDivision.Text.Trim();
+        public string ClientSubdivision => tbxClientSubdivision.Text.Trim();
+        public string GarageLoading => cbxGarageLoading.Text.Trim();
+
+        #endregion
+
         #region Constructor
 
         public frmProjInfo(Document curDoc)
         {
             InitializeComponent();
-            _curDoc = curDoc;
+            CurDoc = curDoc;
             PopulateDropdowns();
             LoadExistingValues();
         }
@@ -80,7 +100,7 @@ namespace PlanQuery
 
         private void LoadExistingValues()
         {
-            ProjectInfo projInfo = _curDoc.ProjectInformation;
+            ProjectInfo projInfo = CurDoc.ProjectInformation;
 
             tbxPlanName.Text = Common.Utils.GetParameterValueByName(projInfo, "Project Name") ?? string.Empty;
             tbxClientSubdivision.Text = Common.Utils.GetParameterValueByName(projInfo, "Client Subdivision") ?? string.Empty;
@@ -130,61 +150,18 @@ namespace PlanQuery
 
         #endregion
 
-        #region Write to Revit
-
-        private void WriteValuesToProjectInfo()
-        {
-            using (Transaction t = new Transaction(_curDoc, "Set Project Information"))
-            {
-                t.Start();
-
-                ProjectInfo projInfo = _curDoc.ProjectInformation;
-
-                SetParameterValue(projInfo, "Project Name", tbxPlanName.Text.Trim());
-                SetParameterValue(projInfo, "Spec Level", cbxSpecLevel.Text.Trim());
-                SetParameterValue(projInfo, "Client Name", cbxClientName.Text.Trim());
-                SetParameterValue(projInfo, "Client Division", cbxClientDivision.Text.Trim());
-                SetParameterValue(projInfo, "Client Subdivision", tbxClientSubdivision.Text.Trim());
-                SetParameterValue(projInfo, "Garage Loading", cbxGarageLoading.Text.Trim());
-
-                t.Commit();
-            }
-        }
-
-        private static void SetParameterValue(ProjectInfo projInfo, string paramName, string value)
-        {
-            IList<Parameter> paramList = projInfo.GetParameters(paramName);
-            if (paramList == null || paramList.Count == 0) return;
-
-            Parameter param = paramList[0];
-            if (!param.IsReadOnly)
-                param.Set(value);
-        }
-
-        #endregion
-
         #region Event Handlers
 
         private void btnOK_Click(object sender, RoutedEventArgs e)
         {
             if (!ValidateInputs(out string errorMessage))
             {
-                MessageBox.Show(errorMessage, "Missing Information",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                Common.Utils.TaskDialogWarning("frmProjInfo", "Missing Information", errorMessage);
                 return;
             }
 
-            try
-            {
-                WriteValuesToProjectInfo();
-                DialogResult = true;
-                Close();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while saving:\n\n{ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            DialogResult = true;
+            Close();
         }
 
         private void btnCancel_Click(object sender, RoutedEventArgs e)

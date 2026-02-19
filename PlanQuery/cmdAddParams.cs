@@ -17,7 +17,7 @@ namespace PlanQuery
             string sharedParamGroup = "Project Information";
 
             // define list of parameters to add
-            List<string> listParams = new List<string> { "Spec Level", "Client Division", "Client Subdivision", "Garage Loading" };
+            List<string> listParams = new List<string> { "Spec Level", "Client Name", "Client Division", "Client Subdivision", "Garage Loading" };
 
             // wrap operation in a try-catch block to handle any errors that may occur
             try
@@ -38,91 +38,106 @@ namespace PlanQuery
                 foreach (string curParam in listParams)
                 {
                     if (Utils.DoesProjectParamExist(curDoc, curParam))
-                    {
                         existingParams.Add(curParam);
-                    }
                     else
-                    {
                         addedParams.Add(curParam);
-                    }
                 }
 
-                // if all parameters already exist in the project, notify user and exit
+                // if all parameters already exist in the project, notify user then launch form
                 if (addedParams.Count == 0)
                 {
-                   Utils.TaskDialogInformation("Plan Query", "Parameters Exist",
+                    Utils.TaskDialogInformation("Plan Query", "Parameters Exist",
                         $"All parameters already exist in the project:\n{string.Join("\n", existingParams)}");
-                    return Result.Succeeded;
                 }
-
-                // set the shared parameter file and open it
-                uiapp.Application.SharedParametersFilename = sharedParamFile;
-
-                // set the definition file variable to the currently open shared parameter file
-                DefinitionFile curDefFile = uiapp.Application.OpenSharedParameterFile();
-
-                // null check the definition file
-                if (curDefFile == null)
+                else
                 {
-                    Utils.TaskDialogError("Plan Query", "Error",
-                        $"Could not open shared parameter file:\n{sharedParamFile}");
-                    return Result.Failed;
-                }
+                    // set the shared parameter file and open it
+                    uiapp.Application.SharedParametersFilename = sharedParamFile;
 
-                // set up binding to the Project Information category
-                CategorySet catSet = new CategorySet();
-                Category catProjInfo = curDoc.Settings.Categories.get_Item(BuiltInCategory.OST_ProjectInformation);
-                catSet.Insert(catProjInfo);
-                InstanceBinding instBinding = uiapp.Application.Create.NewInstanceBinding(catSet);
+                    // set the definition file variable to the currently open shared parameter file
+                    DefinitionFile curDefFile = uiapp.Application.OpenSharedParameterFile();
 
-                // create a transaction to add the parameters to the project
-                using (Transaction t = new Transaction(curDoc, "Add Shared Parameters"))
-                {
-                    // start the transaction
-                    t.Start();
-
-                    // loop through the list of parameters to add
-                    foreach (string curParamName in addedParams)
+                    // null check the definition file
+                    if (curDefFile == null)
                     {
-                        // get the parameter definition from the shared parameter file
-                        Definition curDef = Utils.GetParameterDefinitionFromFile(curDefFile, sharedParamGroup, curParamName);
-
-                        // null check the parameter definition
-                        if (curDef == null)
-                        {
-                            // notify the user if the parameter definition could not be found
-                            Utils.TaskDialogError("Plan Query", "Error",
-                                $"Could not find definition for parameter '{curParamName}' in shared parameter file:\n{sharedParamFile}");
-
-                            // skip to the next parameter in the list
-                            continue;
-                        }
-
-                        // bind the parameter under "Other"
-                        curDoc.ParameterBindings.Insert(curDef, instBinding);
+                        Utils.TaskDialogError("Plan Query", "Error",
+                            $"Could not open shared parameter file:\n{sharedParamFile}");
+                        return Result.Failed;
                     }
 
-                    // commit the transaction
+                    // set up binding to the Project Information category
+                    CategorySet catSet = new CategorySet();
+                    Category catProjInfo = curDoc.Settings.Categories.get_Item(BuiltInCategory.OST_ProjectInformation);
+                    catSet.Insert(catProjInfo);
+                    InstanceBinding instBinding = uiapp.Application.Create.NewInstanceBinding(catSet);
+
+                    // create a transaction to add the parameters to the project
+                    using (Transaction t = new Transaction(curDoc, "Add Shared Parameters"))
+                    {
+                        t.Start();
+
+                        foreach (string curParamName in addedParams)
+                        {
+                            // get the parameter definition from the shared parameter file
+                            Definition curDef = Utils.GetParameterDefinitionFromFile(curDefFile, sharedParamGroup, curParamName);
+
+                            if (curDef == null)
+                            {
+                                Utils.TaskDialogError("Plan Query", "Error",
+                                    $"Could not find definition for parameter '{curParamName}' in shared parameter file:\n{sharedParamFile}");
+                                continue;
+                            }
+
+                            // bind the parameter to the Project Information category
+                            curDoc.ParameterBindings.Insert(curDef, instBinding);
+                        }
+
+                        t.Commit();
+                    }
+
+                    // build and show the result message
+                    string resultMessage = $"Added {addedParams.Count} parameter(s):\n";
+                    foreach (string name in addedParams)
+                        resultMessage += $"  - {name}\n";
+
+                    if (existingParams.Count > 0)
+                    {
+                        resultMessage += $"\n{existingParams.Count} parameter(s) already exist in the project and were not added:\n";
+                        foreach (string name in existingParams)
+                            resultMessage += $"  - {name}\n";
+                    }
+
+                    Utils.TaskDialogInformation("Plan Query", "Parameters Added", resultMessage);
+                }
+
+                // launch frmProjInfo to collect values — runs whether params were just added or already existed
+                frmProjInfo form = new frmProjInfo(curDoc);
+                bool? formResult = form.ShowDialog();
+
+                if (formResult != true)
+                    return Result.Cancelled;
+
+                // write the collected values to Project Information
+                using (Transaction t = new Transaction(curDoc, "Set Project Information"))
+                {
+                    t.Start();
+
+                    ProjectInfo projInfo = curDoc.ProjectInformation;
+
+                    Utils.SetParameterByName(projInfo, "Project Name", form.PlanName);
+                    Utils.SetParameterByName(projInfo, "Spec Level", form.SpecLevel);
+                    Utils.SetParameterByName(projInfo, "Client Name", form.ClientName);
+                    Utils.SetParameterByName(projInfo, "Client Division", form.ClientDivision);
+                    Utils.SetParameterByName(projInfo, "Client Subdivision", form.ClientSubdivision);
+                    Utils.SetParameterByName(projInfo, "Garage Loading", form.GarageLoading);
+
                     t.Commit();
                 }
 
-                // build the result message
-                string resultMessage = $"Added {addedParams.Count} parameter(s):\n";
-                foreach (string name in addedParams)
-                    resultMessage += $"  - {name}\n";
-
-                if (existingParams.Count > 0)
-                {
-                    resultMessage += $"\n{existingParams.Count} parameter(s) already exist in the project and were not added:\n";
-                    foreach (string name in existingParams)
-                        resultMessage += $"  - {name}\n";
-                }
-
-                Utils.TaskDialogInformation("Plan Query", "Parameters Added", resultMessage);
+                Utils.TaskDialogInformation("Plan Query", "Success", "Project Information has been updated.");
 
                 return Result.Succeeded;
             }
-
             catch (Exception ex)
             {
                 message = ex.Message;
@@ -130,11 +145,11 @@ namespace PlanQuery
                 return Result.Failed;
             }
         }
+
         internal static PushButtonData GetButtonData()
         {
-            // use this method to define the properties for this command in the Revit ribbon
-            string buttonInternalName = "btnCommand2";
-            string buttonTitle = "Button 2";
+            string buttonInternalName = "btnAddParams";
+            string buttonTitle = "Add Parameters";
 
             Common.ButtonDataClass myButtonData = new Common.ButtonDataClass(
                 buttonInternalName,
@@ -142,7 +157,7 @@ namespace PlanQuery
                 MethodBase.GetCurrentMethod().DeclaringType?.FullName,
                 Properties.Resources.Blue_32,
                 Properties.Resources.Blue_16,
-                "This is a tooltip for Button 2");
+                "Add required PlanQuery shared parameters to Project Information, then set their values.");
 
             return myButtonData.Data;
         }
