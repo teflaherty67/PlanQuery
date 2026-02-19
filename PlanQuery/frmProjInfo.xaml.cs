@@ -100,7 +100,7 @@ namespace PlanQuery
 
         private void LoadExistingValues()
         {
-            ProjectInfo projInfo = _curDoc.ProjectInformation;
+            ProjectInfo projInfo = CurDoc.ProjectInformation;
 
             tbxPlanName.Text = Common.Utils.GetParameterValueByName(projInfo, "Project Name") ?? string.Empty;
             tbxClientSubdivision.Text = Common.Utils.GetParameterValueByName(projInfo, "Client Subdivision") ?? string.Empty;
