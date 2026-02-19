@@ -97,6 +97,7 @@ namespace PlanQuery
             planData.Client = Utils.GetParameterValueByName(curProjInfo, "Client Name");
             planData.Division = Utils.GetParameterValueByName(curProjInfo, "Client Division");
             planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Client Subdivision");
+            planData.GarageLoading = Utils.GetParameterValueByName(curProjInfo, "Garage Loading");
 
             GetBuildingDimensions(curDoc, out string width, out string depth);
             planData.OverallWidth = width;
@@ -300,7 +301,7 @@ namespace PlanQuery
         /// </summary>
         private string FindExistingRecord(string planName, string specLevel, string subdivision)
         {
-            string formula = $"AND({{PlanName}}=\"{planName}\",{{SpecLevel}}=\"{specLevel}\",{{Subdivision}}=\"{subdivision}\")";
+            string formula = $"AND({{Plan Name}}=\"{planName}\",{{Spec Level}}=\"{specLevel}\",{{Client Subdivision}}=\"{subdivision}\")";
             string url = $"https://api.airtable.com/v0/{AirtableBaseId}/{AirtableTable}" +
                              $"?filterByFormula={Uri.EscapeDataString(formula)}&maxRecords=1";
 
@@ -341,19 +342,20 @@ namespace PlanQuery
         {
             var fields = new Dictionary<string, object>
             {
-                { "PlanName",     plan.PlanName              },
-                { "SpecLevel",    plan.SpecLevel             },
-                { "Client",       plan.Client                },
-                { "Division",     plan.Division              },
-                { "Subdivision",  plan.Subdivision           },
-                { "OverallWidth", plan.OverallWidth          },
-                { "OverallDepth", plan.OverallDepth          },
-                { "Stories",      plan.Stories               },
-                { "Bedrooms",     plan.Bedrooms              },
-                { "Bathrooms",    (double)plan.Bathrooms     },
-                { "GarageBays",   plan.GarageBays            },
-                { "LivingArea",   plan.LivingArea            },
-                { "TotalArea",    plan.TotalArea             }
+                { "Plan Name",          plan.PlanName          },
+                { "Spec Level",         plan.SpecLevel         },
+                { "Client Name",        plan.Client            },
+                { "Client Division",    plan.Division          },
+                { "Client Subdivision", plan.Subdivision       },
+                { "Overall Width",      plan.OverallWidth      },
+                { "Overall Depth",      plan.OverallDepth      },
+                { "Stories",            plan.Stories           },
+                { "Bedrooms",           plan.Bedrooms          },
+                { "Bathrooms",          (double)plan.Bathrooms },
+                { "Garage Bays",        plan.GarageBays        },
+                { "Garage Loading",     plan.GarageLoading     },
+                { "Living Area",        plan.LivingArea        },
+                { "Total Area",         plan.TotalArea         }
             };
 
             return JsonSerializer.Serialize(new { fields });
@@ -379,19 +381,20 @@ namespace PlanQuery
         {
             string message = $@"Ready to save this plan to Airtable:
 
-Plan Name:   {planData.PlanName}
-Spec Level:  {planData.SpecLevel}
-Client:      {planData.Client}
-Division:    {planData.Division}
-Subdivision: {planData.Subdivision}
+Plan Name:      {planData.PlanName}
+Spec Level:     {planData.SpecLevel}
+Client:         {planData.Client}
+Division:       {planData.Division}
+Subdivision:    {planData.Subdivision}
 
-Dimensions:  {planData.OverallWidth} W x {planData.OverallDepth} D
-Total Area:  {planData.TotalArea:N0} SF
-Living Area: {planData.LivingArea:N0} SF
-Bedrooms:    {planData.Bedrooms}
-Bathrooms:   {planData.Bathrooms}
-Stories:     {planData.Stories}
-Garage Bays: {planData.GarageBays}
+Dimensions:     {planData.OverallWidth} W x {planData.OverallDepth} D
+Total Area:     {planData.TotalArea:N0} SF
+Living Area:    {planData.LivingArea:N0} SF
+Bedrooms:       {planData.Bedrooms}
+Bathrooms:      {planData.Bathrooms}
+Stories:        {planData.Stories}
+Garage Bays:    {planData.GarageBays}
+Garage Loading: {planData.GarageLoading}
 
 Do you want to proceed?";
 
