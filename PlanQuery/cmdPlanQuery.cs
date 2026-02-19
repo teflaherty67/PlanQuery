@@ -15,7 +15,7 @@ namespace PlanQuery
     [Transaction(TransactionMode.Manual)]
     public class cmdPlanQuery : IExternalCommand
     {
-        private const string AirtableApiKey = "your-token-here";
+        private const string AirtableApiKey = apiSecrets.AirtableApiKey;
         private const string AirtableBaseId = "appwAYciO1uHJiC7u";
         private const string AirtableTable = "tblCGlniNbnq76ifv";
 
