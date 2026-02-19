@@ -24,6 +24,7 @@ namespace PlanQuery
         public int Bedrooms { get; set; }
         public decimal Bathrooms { get; set; }
         public int GarageBays { get; set; }
+        public string GarageLoading { get; set; }
         public int LivingArea { get; set; }
         public int TotalArea { get; set; }
 
@@ -47,6 +48,7 @@ namespace PlanQuery
                 Stories: {Stories}
                 Bedrooms: {Bedrooms} | Bathrooms: {Bathrooms}
                 Garage: {GarageBays} bay(s)
+                Garage Loading: {GarageLoading} Load
                 Living Area: {LivingArea:N0} SF
                 Total Area: {TotalArea:N0} SF";
         }
