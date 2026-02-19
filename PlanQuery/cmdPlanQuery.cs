@@ -94,9 +94,9 @@ namespace PlanQuery
 
             planData.PlanName = Utils.GetParameterValueByName(curProjInfo, "Project Name");
             planData.SpecLevel = Utils.GetParameterValueByName(curProjInfo, "Spec Level");
-            planData.Client = Utils.GetParameterValueByName(curProjInfo, "Client");
-            planData.Division = Utils.GetParameterValueByName(curProjInfo, "Division");
-            planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Subdivision");
+            planData.Client = Utils.GetParameterValueByName(curProjInfo, "Client Name");
+            planData.Division = Utils.GetParameterValueByName(curProjInfo, "Client Division");
+            planData.Subdivision = Utils.GetParameterValueByName(curProjInfo, "Client Subdivision");
 
             GetBuildingDimensions(curDoc, out string width, out string depth);
             planData.OverallWidth = width;
