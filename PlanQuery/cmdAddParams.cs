@@ -17,7 +17,7 @@ namespace PlanQuery
             string sharedParamGroup = "Project Information";
 
             // define list of parameters to add
-            List<string> listParams = new List<string> { "Spec Level", "Client Name", "Client Division", "Client Subdivision", "Garage Loading" };
+            List<string> listParams = new List<string> { "Spec Level", "Client Division", "Client Subdivision", "Garage Loading" };
 
             // wrap operation in a try-catch block to handle any errors that may occur
             try

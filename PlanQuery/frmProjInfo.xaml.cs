@@ -100,16 +100,21 @@ namespace PlanQuery
 
         private void LoadExistingValues()
         {
-            ProjectInfo projInfo = CurDoc.ProjectInformation;
+            ProjectInfo projInfo = _curDoc.ProjectInformation;
 
             tbxPlanName.Text = Common.Utils.GetParameterValueByName(projInfo, "Project Name") ?? string.Empty;
             tbxClientSubdivision.Text = Common.Utils.GetParameterValueByName(projInfo, "Client Subdivision") ?? string.Empty;
 
             SetComboValue(cbxSpecLevel, Common.Utils.GetParameterValueByName(projInfo, "Spec Level"));
-            SetComboValue(cbxClientName, Common.Utils.GetParameterValueByName(projInfo, "Client Name"));
             SetComboValue(cbxClientDivision, Common.Utils.GetParameterValueByName(projInfo, "Client Division"));
             SetComboValue(cbxGarageLoading, Common.Utils.GetParameterValueByName(projInfo, "Garage Loading"));
+
+            // Client Name is a built-in Revit parameter — use AsString() to avoid
+            // AsValueString() returning the parameter name when the value is empty
+            Parameter clientNameParam = Common.Utils.GetParameterByName(projInfo, "Client Name");
+            SetComboValue(cbxClientName, clientNameParam?.AsString());
         }
+
 
         private static void SetComboValue(System.Windows.Controls.ComboBox combo, string value)
         {
